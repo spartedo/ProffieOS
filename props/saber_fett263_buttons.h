@@ -1449,7 +1449,7 @@ SaberFett263Buttons() : PropBase() {}
       int b = strtol(tmp+1, NULL, 0);
       return Color16(r,g,b);
     }
-    return Color16();
+    return Color16(65535,0,0);
   }
 	
   // Color / Style Editing
@@ -1867,7 +1867,6 @@ SaberFett263Buttons() : PropBase() {}
 
 #ifdef FETT263_CLASH_STRENGTH_SOUND
   void HandleClash() {
-    if (menu_) clash_type_ = CLASH_NONE;
     if (clash_type_ == CLASH_BATTLE_MODE) {
       if (SaberBase::GetClashStrength() < saved_gesture_control.clashdetect) {
         clash_type_ = CLASH_NORMAL;
@@ -1990,7 +1989,7 @@ SaberFett263Buttons() : PropBase() {}
         auto_melt_on_ = false;
       }
       // EVENT_PUSH
-      if (fabs(mss.x) < 3.0 &&
+      if (!menu_ && fabs(mss.x) < 3.0 &&
           mss.y * mss.y + mss.z * mss.z > 100 &&
           fusor.swing_speed() < 20 &&
           fabs(fusor.gyro().x) < 5) {

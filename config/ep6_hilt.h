@@ -185,15 +185,15 @@ Preset presets[] = { //When Emitter IS Attached
 
 BladeConfig blades[] = {
 	 { 0, 
-	    WS281XBladePtr<123, blade2Pin, Color8::GRB, PowerPINS<bladePowerPin4, bladePowerPin5 > >(), // Main Blade with 113 pixels
-	    WS281XBladePtr<5, blade2Pin, Color8::GRB, PowerPINS<bladePowerPin4, bladePowerPin5> >(), // Connector “Hilt” pcb 5 pixels												
+	    WS281XBladePtr<123, blade2Pin, Color8::GRB, PowerPINS<bladePowerPin5, bladePowerPin6 > >(), // Main Blade with 113 pixels
+	    WS281XBladePtr<5, blade2Pin, Color8::GRB, PowerPINS<bladePowerPin5, bladePowerPin6> >(), // Connector “Hilt” pcb 5 pixels
 		//SimpleBladePtr<CH2LED, NoLED, NoLED, NoLED, bladePowerPin5, -1, -1, -1>(),
 		//SimpleBladePtr<CH1LED, NoLED, NoLED, NoLED, bladePowerPin6, -1, -1, -1>(),
 		CONFIGARRAY(presets),
 	 },	 
 	 { NO_BLADE, 
-	    DimBlade(5.0, WS281XBladePtr<123, blade2Pin, Color8::GRB, PowerPINS<bladePowerPin4, bladePowerPin5 > >()), // Main Blade with 113 pixels
-		DimBlade(5.0, WS281XBladePtr<5, blade2Pin, Color8::GRB, PowerPINS<bladePowerPin4, bladePowerPin5> >()), // Connector “Hilt” pcb 5 pixels
+	    DimBlade(5.0, WS281XBladePtr<123, blade2Pin, Color8::GRB, PowerPINS<bladePowerPin5, bladePowerPin6 > >()), // Main Blade with 113 pixels
+		DimBlade(5.0, WS281XBladePtr<5, blade2Pin, Color8::GRB, PowerPINS<bladePowerPin5, bladePowerPin6> >()), // Connector “Hilt” pcb 5 pixels
 		//SimpleBladePtr<CH2LED, NoLED, NoLED, NoLED, bladePowerPin5, -1, -1, -1>(),
 		//SimpleBladePtr<CH1LED, NoLED, NoLED, NoLED, bladePowerPin6, -1, -1, -1>(),
 		CONFIGARRAY(presets2),

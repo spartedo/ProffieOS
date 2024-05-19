@@ -13,6 +13,7 @@
 #define NELEM(X) (sizeof(X)/sizeof((X)[0]))
 #define SCOPED_PROFILER() do { } while(0)
 #define NUM_BLADES 1
+const int maxLedsPerStrip = 144;
 
 // clamp(x, a, b) makes sure that x is between a and b.
 float clamp(float x, float a, float b) {
@@ -76,6 +77,9 @@ int32_t clampi32(int32_t x, int32_t a, int32_t b) {
 }
 
 int random(int x) { return (rand() & 0x7fffff) % x; }
+class BladeBase;
+int GetBladeNumber(BladeBase* blad) { return 0; }
+
 class Looper {
 public:
   static void DoHFLoop() {}
@@ -152,6 +156,7 @@ Monitoring monitor;
 #include "../functions/effect_position.h"
 #include "../functions/random.h"
 #include "../functions/mult.h"
+#include "../functions/hold_peak.h"
 #include "mix.h"
 #include "strobe.h"
 #include "hump_flicker.h"
@@ -167,6 +172,12 @@ Monitoring monitor;
 #include "sparkle.h"
 #include "../common/command_parser.h"
 #include "../common/preset.h"
+#include "random_per_led_flicker.h"
+#include "../functions/clash_impact.h"
+#include "../functions/sum.h"
+#include "../functions/ramp.h"
+#include "rotate_color.h"
+#include "random_blink.h"
 
 Color16 TestRgbArgColors[256];
 
@@ -212,7 +223,6 @@ SaberBase* saberbases = NULL;
 SaberBase::LockupType SaberBase::lockup_ = SaberBase::LOCKUP_NONE;
 SaberBase::ColorChangeMode SaberBase::color_change_mode_ =
   SaberBase::COLOR_CHANGE_MODE_NONE;
-bool SaberBase::on_ = false;
 uint32_t SaberBase::last_motion_request_ = 0;
 uint32_t SaberBase::current_variation_ = 0;
 float SaberBase::sound_length = 0.0;
@@ -237,13 +247,10 @@ public:
     fprintf(stderr, "NOT IMPLEMENTED\n");
     exit(1);
   }
-  size_t GetEffects(BladeEffect** blade_effects) override {
-    return 0;
-  }
   void allow_disable() override {
     allow_disable_ = true;
   }
-  void Activate() override {
+  void Activate(int blade_number) override {
     fprintf(stderr, "NOT IMPLEMENTED\n");
     exit(1);
   }
@@ -254,9 +261,7 @@ public:
   Color8::Byteorder get_byteorder() const {
     return Color8::RGB;
   }
-  bool IsPrimary() override {
-    return true;
-  }
+  int GetBladeNumber() const override { return 1; }
   void SetStyle(BladeStyle* style) override {
     // current_style should be nullptr;
     current_style_ = style;
@@ -381,7 +386,7 @@ void test_inouthelper(BladeStyle* style) {
       fprintf(stderr, "Should not be able to turn off when extending.\n");
       exit(1);
     }
-    if (mock_blade.colors[0].r <= last || mock_blade.colors[0].r == 65536) {
+    if (mock_blade.colors[0].r <= last || mock_blade.colors[0].r == 65535) {
       fprintf(stderr, "InOutHelper failed to brighten blade at t = %d red = %d last = %d\n", micros_, last, mock_blade.colors[0].r);
       exit(1);
     }
@@ -882,7 +887,77 @@ void test_argument_parsing() {
   CHECK_COLOR(TestRgbArgColors[3], 7, 8, 9, 0);
 }
 
+void test_gradient() {
+  MockBlade mock_blade;
+  mock_blade.colors.resize(3);
+  Style<Gradient<Red, Green, Blue>> style;
+  style.run(&mock_blade);
+
+  CHECK_COLOR(mock_blade.colors[0], 65535, 0, 0, 1);
+  CHECK_COLOR(mock_blade.colors[1], 0, 65535, 0, 1);
+  CHECK_COLOR(mock_blade.colors[2], 0, 0, 65535, 1);
+}
+
+void test_mix() {
+  MockBlade mock_blade;
+  mock_blade.colors.resize(1);
+  Style<Mix<Int<0>, Red, Green, Blue, Yellow, White>> s1;
+  s1.run(&mock_blade);
+  CHECK_COLOR(mock_blade.colors[0], 65535, 0, 0, 1);
+  
+  Style<Mix<Int<4096>, Red, Green, Blue, Yellow, White>> s2;
+  s2.run(&mock_blade);
+  CHECK_COLOR(mock_blade.colors[0], 32767, 32767, 0, 1);
+
+  Style<Mix<Int<8192>, Red, Green, Blue, Yellow, White>> s3;
+  s3.run(&mock_blade);
+  CHECK_COLOR(mock_blade.colors[0], 0, 65535, 0, 1);
+}
+
+#define CHECK(X) do {                                           \
+    if (!(X)) { fprintf(stderr, "%s failed, line %d\n", #X, __LINE__); exit(1); } \
+} while(0)
+
+void test_layers() {
+  CHECK( (is_same_type<Layers<AlphaL<Red, Int<0>>, Blue>, Blue>::value) );
+  CHECK( (!is_same_type<Layers<AlphaL<Red, Int<1>>, Blue>, Blue>::value) );
+}
+
+void test_smoothstep() {
+  SmoothStep<Int<16384>, Int<16384>> ss;
+  MockBlade mock_blade;
+  mock_blade.colors.resize(100);
+  ss.run(&mock_blade);
+  for (int i = 0; i < 25; i++) {
+    CHECK_NEAR(ss.getInteger(i), 0, 0);
+    CHECK_NEAR(ss.getInteger(i + 75), 32768, 1);
+  }
+  for (int i = 25; i < 50; i++) {
+    float x = (i - 25) / 50.0;
+    CHECK_NEAR(ss.getInteger(i), (int)((3-2*x)*x*x  * 32768), 32);
+  }
+}
+
+#include "test_types.h"
+#include "get_arg_max.h"
+
+void test_get_max_arg() {
+
+  CHECK_NEAR((GetArgMax<TrSelect<IntArg<77, 0>, TrInstant, TrInstant, TrInstant>, 77>::value), 3, 0);
+  CHECK_NEAR((GetArgMax<InOutTrL<TrSelect<IntArg<77, 0>, TrInstant, TrInstant>, TrInstant, Black>, 77>::value), 2, 0);
+
+  CHECK_NEAR((GetArgMax<LARGE_TYPE_WITH_OPTIONS, STYLE_OPTION_ARG>::value), 2, 0);
+  CHECK_NEAR((GetArgMax<LARGE_TYPE_WITH_OPTIONS, IGNITION_OPTION_ARG>::value), 5, 0);
+  CHECK_NEAR((GetArgMax<LARGE_TYPE_WITH_OPTIONS, RETRACTION_OPTION_ARG>::value), 3, 0);
+  CHECK_NEAR((GetArgMax<LARGE_TYPE_WITH_OPTIONS, PREON_OPTION_ARG>::value), 5, 0);
+}
+
 int main() {
+  test_get_max_arg();
+  test_smoothstep();
+  test_layers();
+  test_mix();
+  test_gradient();
   test_style6();
   test_style5();
   test_style4();

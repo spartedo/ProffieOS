@@ -87,6 +87,8 @@ mdauto		Sound made when switching to AUTO mode
 #ifndef PROPS_BLASTER_H
 #define PROPS_BLASTER_H
 
+#define PROP_HAS_GETBLASTERMODE
+
 #ifndef BLASTER_DEFAULT_MODE
 #define BLASTER_DEFAULT_MODE MODE_STUN
 #endif
@@ -128,6 +130,10 @@ public:
 
   BlasterMode blaster_mode = BLASTER_DEFAULT_MODE;
 	
+  int GetBlasterMode() const {
+    return blaster_mode;
+  }
+
   virtual void SetBlasterMode(BlasterMode to_mode) {
     if (!auto_firing_) {
       blaster_mode = to_mode;
@@ -415,7 +421,7 @@ public:
   }
 
    // Blaster effects, auto fire is handled by begin/end lockup
-  void SB_Effect(EffectType effect, float location) override {
+  void SB_Effect(EffectType effect, EffectLocation location) override {
     switch (effect) {
       default: return;
       case EFFECT_STUN: hybrid_font.PlayCommon(&SFX_stun); return;
@@ -443,7 +449,11 @@ public:
         } else if (SFX_mode) {
           hybrid_font.PlayCommon(&SFX_mode);
         } else {
+#ifndef DISABLE_TALKIE
           talkie.Say(spSTUN);
+#else
+          beeper.Beep(0.05, 2000.0);
+#endif
         }
       break;
       case MODE_KILL:
@@ -452,7 +462,11 @@ public:
         } else if (SFX_mode) {
           hybrid_font.PlayCommon(&SFX_mode);
         } else {
+#ifndef DISABLE_TALKIE
           talkie.Say(spKILL);      
+#else
+          beeper.Beep(0.05, 2000.0);
+#endif
         }
       break;
       case MODE_AUTO:
@@ -461,7 +475,11 @@ public:
         } else if (SFX_mode) {
           hybrid_font.PlayCommon(&SFX_mode);
         } else {
+#ifndef DISABLE_TALKIE
           talkie.Say(spAUTOFIRE);       
+#else
+          beeper.Beep(0.05, 2000.0);
+#endif
         }
       break;
     }

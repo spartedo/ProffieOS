@@ -81,6 +81,7 @@ class Effect {
     BMP,
     PBM,
     Binary, // .BIN
+    SCR,
     UNKNOWN,
   };
 
@@ -98,6 +99,7 @@ class Effect {
   enum class FileType : uint8_t {
     SOUND,
     IMAGE,
+    SCREEN,
     UNKNOWN,
   };
 
@@ -111,6 +113,8 @@ class Effect {
       case PBM:
       case Binary:
 	return FileType::IMAGE;
+      case SCR:
+	return FileType::SCREEN;
       default:
 	return FileType::UNKNOWN;
     }
@@ -123,6 +127,7 @@ class Effect {
     if (endswith(".bmp", filename)) return BMP;
     if (endswith(".pbm", filename)) return PBM;
     if (endswith(".bin", filename)) return Binary;
+    if (endswith(".scr", filename)) return SCR;
     return UNKNOWN;
   }
 
@@ -715,9 +720,11 @@ EFFECT(blst);
 EFFECT(clsh);
 EFFECT2(in, pstoff);
 EFFECT(out);
+EFFECT(fastout);
 EFFECT2(lock, lock);
 EFFECT(swng);
 EFFECT(slsh);
+EFFECT(quote);
 
 // Looped swing fonts. (SmoothSwing V1/V2)
 EFFECT2(swingl, swingl);  // Looped swing, LOW
@@ -754,6 +761,7 @@ EFFECT(ccend);
 EFFECT(ccchange);
 
 EFFECT(altchng);
+EFFECT(chhum);
 
 // Blaster effects
 // hum, boot and font are reused from sabers and already defined.
@@ -772,7 +780,7 @@ class EffectFileReader : public FileReader {
 public:
   EffectFileReader() : FileReader(), do_open_(0) {}
 
-  bool Play(Effect* f) {
+  bool PlayInternal(Effect* f) {
     do_open_.set(false);
     Effect::FileID id = f->RandomFile();
     if (!id) {
@@ -783,10 +791,37 @@ public:
     return true;
   }
 
-  void Play(const char* filename) {
+  bool Play(Effect* f) {
+    if (PlayInternal(f)) {
+      do_open_.set(true);
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  void PlayInternal(const char* filename) {
     do_open_.set(false);
     strncpy(filename_, filename, sizeof(filename_));
+  }
+
+  void do_open() {
+    MountSDCard();
     do_open_.set(true);
+  }
+
+  void Play(const char* filename) {
+    PlayInternal(filename);
+    do_open();
+  }
+
+  bool get_do_open() const {
+    return do_open_.get();
+  }
+
+  void Close() {
+    do_open_.set(false);
+    FileReader::Close();
   }
 
   // Returns true if we had been asked to open a file.
@@ -801,7 +836,11 @@ public:
     do_open_.set(false);
     return true;
   }
-private:
+
+  const char* GetFilename() {
+    return filename_;
+  }
+protected:
   POAtomic<bool> do_open_;
   char filename_[128];
 };

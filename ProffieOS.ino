@@ -28,29 +28,25 @@
 #define CONFIG_FILE "config/ep6_hilt.h"
 
 // #define CONFIG_FILE "config/default_proffieboard_config.h"
-// #define CONFIG_FILE "config/default_v3_config.h"
-// #define CONFIG_FILE "config/crossguard_config.h"
-// #define CONFIG_FILE "config/graflex_v1_config.h"
-// #define CONFIG_FILE "config/prop_shield_fastled_v1_config.h"
-// #define CONFIG_FILE "config/owk_v2_config.h"
-// #define CONFIG_FILE "config/test_bench_config.h"
-// #define CONFIG_FILE "config/toy_saber_config.h"
 // #define CONFIG_FILE "config/proffieboard_v1_test_bench_config.h"
 // #define CONFIG_FILE "config/proffieboard_v2_testing_config.h"
 // #define CONFIG_FILE "config/td_proffieboard_config.h"
 // #define CONFIG_FILE "config/proffieboard_v1_graflex.h"
 // #define CONFIG_FILE "config/teensy_audio_shield_micom.h"
 // #define CONFIG_FILE "config/proffieboard_v2_ob4.h"
-// #define CONFIG_FILE "config/testconfig.h"
-// #define CONFIG_FILE "config/test_bench_config.h"
 
 #ifndef CONFIG_FILE
 #error Please set CONFIG_FILE as shown above.
 #endif
 
+#include "common/resources.h"
+
 #define CONFIG_TOP
 #include CONFIG_FILE
 #undef CONFIG_TOP
+
+#include "common/capabilities.h"
+
 
 #if !defined(ENABLE_AUDIO) && !defined(DISABLE_AUDIO)
 #define ENABLE_AUDIO
@@ -68,8 +64,21 @@
 #define ENABLE_SD
 #endif
 
+#if !defined(KILL_OLD_PLAYERS) && !defined(DISABLE_KILL_OLD_PLAYERS)
+#define KILL_OLD_PLAYERS
+#endif
+
+#if !defined(NO_REPEAT_RANDOM) && !defined(DISABLE_NO_REPEAT_RANDOM)
+#define NO_REPEAT_RANDOM
+#endif
+
+
 #ifndef BOOT_VOLUME
 #define BOOT_VOLUME VOLUME
+#endif
+
+#ifndef FONT_PATTERN
+#define FONT_PATTERN "*;common"
 #endif
 
 #ifdef SAVE_STATE
@@ -189,13 +198,15 @@
 #ifdef abs
 #undef abs
 namespace {
-template<typename T> constexpr auto abs(T x) -> decltype(-x) { return x < 0 ? -x : x; }
+template<typename T> constexpr auto abs(T x) -> decltype(-x) {
+  return x < 0 ? -x : x;
+}
 }
 #endif
 
-#else // TEENSYDUINO
+#else  // TEENSYDUINO
 #define digitalWriteFast digitalWrite
-#endif // TEENSYDUINO
+#endif  // TEENSYDUINO
 
 #ifdef ARDUINO_ARCH_STM32L4
 // This is a hack to let me access the internal stuff..
@@ -215,10 +226,10 @@ template<typename T> constexpr auto abs(T x) -> decltype(-x) { return x < 0 ? -x
 #include <STM32.h>
 #define DMAChannel stm32l4_dma_t
 #define DMAMEM
-#define NVIC_SET_PRIORITY(X,Y) NVIC_SetPriority((X), (IRQn_Type)(Y))
-#else //  ARDUINO_ARCH_STM32L4
+#define NVIC_SET_PRIORITY(X, Y) NVIC_SetPriority((X), (IRQn_Type)(Y))
+#else  //  ARDUINO_ARCH_STM32L4
 #define INPUT_ANALOG INPUT
-#endif //  ARDUINO_ARCH_STM32L4
+#endif  //  ARDUINO_ARCH_STM32L4
 
 #include <math.h>
 #include <malloc.h>
@@ -257,7 +268,7 @@ const char version[] = "$Id: ce12a06a1e236b5101ec60c950530a9a4719a74d $";
 Monitoring monitor;
 DEFINE_COMMON_STDOUT_GLOBALS;
 
-void PrintQuotedValue(const char *name, const char* str) {
+void PrintQuotedValue(const char* name, const char* str) {
   STDOUT.print(name);
   STDOUT.write('=');
   if (str) {
@@ -289,7 +300,8 @@ void PrintQuotedValue(const char *name, const char* str) {
 // it will stay high.
 class ScopedPinTracer {
 public:
-  explicit ScopedPinTracer(int pin) : pin_(pin) {
+  explicit ScopedPinTracer(int pin)
+    : pin_(pin) {
     pinMode(pin_, OUTPUT);
     digitalWriteFast(pin, HIGH);
   }
@@ -369,7 +381,6 @@ SaberBase* saberbases = NULL;
 SaberBase::LockupType SaberBase::lockup_ = SaberBase::LOCKUP_NONE;
 SaberBase::ColorChangeMode SaberBase::color_change_mode_ =
   SaberBase::COLOR_CHANGE_MODE_NONE;
-bool SaberBase::on_ = false;
 uint32_t SaberBase::last_motion_request_ = 0;
 uint32_t SaberBase::current_variation_ = 0;
 float SaberBase::sound_length = 0.0;
@@ -382,7 +393,9 @@ int SaberBase::dimming_ = 16384;
 #include "common/box_filter.h"
 
 // Returns the decimals of a number, ie 12.2134 -> 0.2134
-float fract(float x) { return x - floorf(x); }
+float fract(float x) {
+  return x - floorf(x);
+}
 
 // clamp(x, a, b) makes sure that x is between a and b.
 float clamp(float x, float a, float b) {
@@ -422,7 +435,7 @@ const char* GetSaveDir();
 char current_directory[128];
 const char* next_current_directory(const char* dir) {
   dir += strlen(dir);
-  dir ++;
+  dir++;
   if (!*dir) return NULL;
   return dir;
 }
@@ -454,8 +467,13 @@ const char* previous_current_directory(const char* dir) {
 #include "blades/blade_wrapper.h"
 
 class MicroEventTime {
-  void SetToNow() { micros_ = micros(); millis_ = millis(); }
-  uint32_t millis_since() { return millis() - millis_; }
+  void SetToNow() {
+    micros_ = micros();
+    millis_ = millis();
+  }
+  uint32_t millis_since() {
+    return millis() - millis_;
+  }
   uint32_t micros_since() {
     if (millis_since() > (0xFFFF0000UL / 1000)) return 0xFFFFFFFFUL;
     return micros() - micros_;
@@ -517,6 +535,7 @@ struct is_same_type<T, T> { static const bool value = true; };
 #include "styles/color_select.h"
 #include "styles/remap.h"
 #include "styles/edit_mode.h"
+#include "styles/pixelate.h"
 
 // functions
 #include "functions/ifon.h"
@@ -560,6 +579,9 @@ struct is_same_type<T, T> { static const bool value = true; };
 #include "functions/alt.h"
 #include "functions/volume_level.h"
 #include "functions/mod.h"
+#include "functions/readpin.h"
+#include "functions/bullet_count.h"
+#include "functions/blaster_mode.h"
 
 // transitions
 #include "transitions/fade.h"
@@ -608,14 +630,47 @@ class NoLED;
 #include "styles/show_color.h"
 #include "styles/blade_shortener.h"
 
+#include "sound/sound_library.h"
+
+#include "modes/mode.h"
+#include "modes/stepped_mode.h"
+#include "modes/color_change_modes.h"
+#include "modes/menu_list.h"
+#include "modes/bool_setting.h"
+#include "modes/color_menues.h"
+#include "modes/sorted_list_menues.h"
+#include "modes/preset_modes.h"
+#include "modes/style_option_modes.h"
+#include "modes/settings_menues.h"
+#include "modes/default_spec.h"
+
 BladeConfig* current_config = nullptr;
 class BladeBase* GetPrimaryBlade() {
 #if NUM_BLADES == 0
   return nullptr;
-#else  
+#else
   return current_config->blade1;
-#endif  
+#endif
 }
+
+#define BLADE_NUMBER_FINDER(N) if (current_config->blade##N == blade) return N;
+// Returns 1..NUM_BLADES (0 if not found)
+int GetBladeNumber(BladeBase *blade) {
+  ONCEPERBLADE(BLADE_NUMBER_FINDER);
+  return 0;
+}
+
+#define RETURN_BLADE_BY_NUMBER(N) case N: return current_config->blade##N;
+
+// 1 is first blade
+BladeBase* GetBladeByNumber(int n) {
+  if (!current_config) return nullptr;
+  switch (n) {
+    ONCEPERBLADE(RETURN_BLADE_BY_NUMBER);
+  }
+  return nullptr;
+}
+
 const char* GetSaveDir() {
   if (!current_config) return "";
   if (!current_config->save_dir) return "";
@@ -643,8 +698,60 @@ ArgParserInterface* CurrentArgParser;
 PROP_TYPE prop;
 
 #ifdef BLADE_ID_SCAN_MILLIS
-bool ScanBladeIdNow() { return prop.ScanBladeIdNow(); }
+bool ScanBladeIdNow() {
+  return prop.ScanBladeIdNow();
+}
 #endif
+
+#ifdef BLASTER_SHOTS_UNTIL_EMPTY
+int prop_GetBulletCount() {
+    return prop.GetBulletCount();
+}
+#endif
+
+#ifdef PROP_HAS_GETBLASTERMODE
+int prop_GetBlasterMode() {
+    return prop.GetBlasterMode();
+}
+#endif
+
+
+#ifdef DYNAMIC_CLASH_THRESHOLD
+int prop_GetCurrentClashThreshold() {
+  return prop.GetCurrentClashThreshold();
+}
+void prop_SetClashThreshold(int clash_threshold) {
+  prop.SetClashThreshold(clash_threshold);
+}
+#endif
+
+#ifdef DYNAMIC_BLADE_LENGTH
+int prop_GetBladeLength(int blade) {
+  return prop.GetBladeLength(blade); 
+}
+int prop_GetMaxBladeLength(int blade) {
+  return prop.GetMaxBladeLength(blade);
+}
+void prop_SetBladeLength(int blade, int len) {
+  prop.SetBladeLength(blade, len);
+}
+#endif
+
+int prop_GetPresetPosition() {
+  return prop.GetPresetPosition();
+}
+void prop_MovePreset(int position) {
+  prop.MovePreset(position);
+}
+
+const char* GetStyle(int blade) { return prop.GetStyle(blade); }
+void SetStyle(int blade, LSPtr<char> style);
+void SetStyle(int blade, LSPtr<char> style) { prop.SetStyle(blade, std::move(style)); }
+void SetFont(const char* font) { prop.SetFont(font); }
+void SetTrack(const char* track) { prop.SetTrack(track); }
+const char* GetFont() { return prop.GetFont(); }
+const char* GetTrack() { return prop.GetTrack(); }
+void chdir(const StringPiece font) { prop.chdir(font); }
 
 #if 0
 #include "scripts/test_motion_timeout.h"
@@ -669,6 +776,7 @@ V3TestScript script;
 #endif
 #include "buttons/rotary.h"
 #include "buttons/pots.h"
+#include "buttons/fast_button.h"
 
 #include "ir/ir.h"
 #include "ir/receiver.h"
@@ -696,7 +804,9 @@ uint32_t startup_MODER[4];
 
 #ifdef BLADE_DETECT_PIN
 LatchingButtonTemplate<FloatingButtonBase<BLADE_DETECT_PIN>>
-    BladeDetect(BUTTON_BLADE_DETECT, BLADE_DETECT_PIN, "blade_detect");
+  BladeDetect(BUTTON_BLADE_DETECT, BLADE_DETECT_PIN, "blade_detect");
+
+USE_PIN_OUTPUT(BLADE_DETECT_PIN, PO_SubSystems::PO_BLADE_DETECT);
 #endif
 
 #include "common/sd_test.h"
@@ -704,13 +814,17 @@ LatchingButtonTemplate<FloatingButtonBase<BLADE_DETECT_PIN>>
 class I2CDevice;
 
 class Commands : public CommandParser {
- public:
+public:
   enum PinType {
     PinTypeFloating,
     PinTypePulldown,
     PinTypeCap,
     PinTypeOther,
   };
+
+#ifndef DISABLE_DIAGNOSTIC_COMMANDS
+  File current_file;
+#endif  
 
   bool TestPin(int pin, PinType t) {
     int ret = 0;
@@ -731,7 +845,7 @@ class Commands : public CommandParser {
     uint32_t end;
     while (digitalRead(pin)) {
       end = micros();
-      if (end - start > 32768) break; // 32 millis
+      if (end - start > 32768) break;  // 32 millis
     }
     ret <<= 16;
     ret |= (end - start);
@@ -744,7 +858,7 @@ class Commands : public CommandParser {
 
     return ret;
   }
-  bool Parse(const char* cmd, const char* e) override {   
+  bool Parse(const char* cmd, const char* e) override {
 
 #ifdef ENABLE_SERIALFLASH
     if (!strcmp(cmd, "ls")) {
@@ -770,7 +884,8 @@ class Commands : public CommandParser {
     if (!strcmp(cmd, "format")) {
       STDOUT.print("Erasing ... ");
       SerialFlashChip::eraseAll();
-      while (!SerialFlashChip::ready());
+      while (!SerialFlashChip::ready())
+        ;
       STDOUT.println("Done");
       return true;
     }
@@ -796,6 +911,7 @@ class Commands : public CommandParser {
 #endif
 
 #ifndef DISABLE_DIAGNOSTIC_COMMANDS
+    // TODO: Maybe use the commands from the workbench?
     if (!strcmp(cmd, "cat") && e) {
       LOCK_SD(true);
       File f = LSFS::Open(e);
@@ -806,7 +922,25 @@ class Commands : public CommandParser {
       LOCK_SD(false);
       return true;
     }
-#endif    
+    if (!strcmp(cmd, "openfile") && e) {
+      LOCK_SD(true);
+      current_file = LSFS::OpenRW(e);
+      LOCK_SD(false);
+      return true;
+    }
+    if (!strcmp(cmd, "closefile")) {
+      LOCK_SD(true);
+      current_file.close();
+      LOCK_SD(false);
+      return true;
+    }
+    if (!strcmp(cmd, ">>")) {
+      LOCK_SD(true);
+      current_file.println(e ? e : "");
+      LOCK_SD(false);
+      return true;
+    }
+#endif
 
     if (!strcmp(cmd, "del") && e) {
       LOCK_SD(true);
@@ -831,15 +965,15 @@ class Commands : public CommandParser {
       STDOUT.println("Done");
       return true;
     }
-#endif // ENABLE_DEVELOPER_COMMANDS
+#endif  // ENABLE_DEVELOPER_COMMANDS
 
 #ifndef DISABLE_DIAGNOSTIC_COMMANDS
     if (!strcmp(cmd, "sdtest")) {
       SDTestHelper sdtester;
       if (e && !strcmp(e, "all")) {
-	sdtester.TestDir("");
+        sdtester.TestDir("");
       } else {
-	sdtester.TestFont();
+        sdtester.TestFont();
       }
       return true;
     }
@@ -877,7 +1011,7 @@ class Commands : public CommandParser {
       Effect::ShowAll();
       return true;
     }
-#endif    
+#endif
 #if 0
     if (!strcmp(cmd, "df")) {
       STDOUT.print(SerialFlashChip::capacity());
@@ -892,7 +1026,7 @@ class Commands : public CommandParser {
       STDOUT.println("Ok.");
       return true;
     }
-#endif // ENABLE_DEVELOPER_COMMANDS
+#endif  // ENABLE_DEVELOPER_COMMANDS
 #ifdef ENABLE_DEVELOPER_COMMANDS
     if (!strcmp(cmd, "low") && e) {
       pinMode(atoi(e), OUTPUT);
@@ -900,20 +1034,20 @@ class Commands : public CommandParser {
       STDOUT.println("Ok.");
       return true;
     }
-#endif // ENABLE_DEVELOPER_COMMANDS
+#endif  // ENABLE_DEVELOPER_COMMANDS
 
 #if VERSION_MAJOR >= 4
     if (!strcmp(cmd, "booster")) {
-       if (!strcmp(e, "on")) {
-         digitalWrite(boosterPin, HIGH);
-         STDOUT.println("Booster on.");
-         return true;
-       }
-       if (!strcmp(e, "off")) {
-         digitalWrite(boosterPin, LOW);
-         STDOUT.println("Booster off.");
-         return true;
-       }
+      if (!strcmp(e, "on")) {
+        digitalWrite(boosterPin, HIGH);
+        STDOUT.println("Booster on.");
+        return true;
+      }
+      if (!strcmp(e, "off")) {
+        digitalWrite(boosterPin, LOW);
+        STDOUT.println("Booster off.");
+        return true;
+      }
     }
 #endif
 #ifdef ENABLE_AUDIO
@@ -946,7 +1080,7 @@ class Commands : public CommandParser {
       wav_players[0].Stop();
       return true;
     }
-#endif // ENABLE_DEVELOPER_COMMANDS
+#endif  // ENABLE_DEVELOPER_COMMANDS
 #ifdef ENABLE_DEVELOPER_COMMANDS
     if (!strcmp(cmd, "dumpwavplayer")) {
       for (size_t i = 0; i < NELEM(wav_players); i++) {
@@ -955,7 +1089,7 @@ class Commands : public CommandParser {
       }
       return true;
     }
-#endif // ENABLE_DEVELOPER_COMMANDS
+#endif  // ENABLE_DEVELOPER_COMMANDS
 #endif
 
 #ifdef ENABLE_DEVELOPER_COMMANDS
@@ -980,7 +1114,7 @@ class Commands : public CommandParser {
       STDOUT.println("done");
       return true;
     }
-#endif // ENABLE_DEVELOPER_COMMANDS
+#endif  // ENABLE_DEVELOPER_COMMANDS
 #ifdef ENABLE_DEVELOPER_COMMANDS
     if (!strcmp(cmd, "twiddle2")) {
       int pin = strtol(e, NULL, 0);
@@ -999,7 +1133,7 @@ class Commands : public CommandParser {
       STDOUT.println("done");
       return true;
     }
-#endif // ENABLE_DEVELOPER_COMMANDS
+#endif  // ENABLE_DEVELOPER_COMMANDS
 
 #ifndef DISABLE_DIAGNOSTIC_COMMANDS
     if (!strcmp(cmd, "malloc")) {
@@ -1009,7 +1143,7 @@ class Commands : public CommandParser {
       STDOUT.println(mallinfo().fordblks);
       return true;
     }
-#endif    
+#endif
     if (!strcmp(cmd, "make_default_console")) {
       default_output = stdout_output;
       return true;
@@ -1068,7 +1202,7 @@ class Commands : public CommandParser {
 #endif
 #ifdef ARDUINO_ARCH_STM32L4
       if (!(DWT->CTRL & DWT_CTRL_CYCCNTENA_Msk)) {
-        CoreDebug->DEMCR |= 1<<24; // DEMCR_TRCENA_Msk;
+        CoreDebug->DEMCR |= 1 << 24;  // DEMCR_TRCENA_Msk;
         DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
         STDOUT.println("Cycle counting enabled, top will work next time.");
         return true;
@@ -1077,12 +1211,7 @@ class Commands : public CommandParser {
 
       // TODO: list cpu usage for various objects.
       float total_cycles =
-        (float)(audio_dma_interrupt_cycles +
-	        pixel_dma_interrupt_cycles +
-		motion_interrupt_cycles +
-                 wav_interrupt_cycles +
-		 Looper::CountCycles() +
-		 CountProfileCycles());
+        (float)(audio_dma_interrupt_cycles + pixel_dma_interrupt_cycles + motion_interrupt_cycles + wav_interrupt_cycles + Looper::CountCycles() + CountProfileCycles());
       STDOUT.print("Audio DMA: ");
       STDOUT.print(audio_dma_interrupt_cycles * 100.0f / total_cycles);
       STDOUT.println("%");
@@ -1119,8 +1248,8 @@ class Commands : public CommandParser {
 
     if (!strcmp(cmd, "version")) {
       STDOUT << version
-      << "\n" CONFIG_FILE "\nprop: "  TOSTRING(PROP_TYPE)  "\nbuttons: " TOSTRING(NUM_BUTTONS) "\ninstalled: " 
-      << install_time << "\n";
+             << "\n" CONFIG_FILE "\nprop: " TOSTRING(PROP_TYPE) "\nbuttons: " TOSTRING(NUM_BUTTONS) "\ninstalled: "
+             << install_time << "\n";
       return true;
     }
     if (!strcmp(cmd, "reset")) {
@@ -1129,7 +1258,7 @@ class Commands : public CommandParser {
 #endif
 #ifdef ARDUINO_ARCH_STM32L4
       STM32.reset();
-#endif 
+#endif
       STDOUT.println("Reset failed.");
       return true;
     }
@@ -1159,7 +1288,7 @@ class Commands : public CommandParser {
       STDOUT.println(STM32.getTemperature());
       return true;
     }
-#endif // ENABLE_DEVELOPER_COMMANDS
+#endif  // ENABLE_DEVELOPER_COMMANDS
 #ifdef ENABLE_DEVELOPER_COMMANDS
     if (!strcmp(cmd, "i2cstate")) {
       extern void DumpI2CState();
@@ -1167,26 +1296,26 @@ class Commands : public CommandParser {
       SaberBase::DumpMotionRequest();
       return true;
     }
-#endif // ENABLE_DEVELOPER_COMMANDS
+#endif  // ENABLE_DEVELOPER_COMMANDS
 #ifdef ENABLE_DEVELOPER_COMMANDS
     if (!strcmp(cmd, "portstates")) {
-      GPIO_TypeDef *GPIO;
+      GPIO_TypeDef* GPIO;
       for (int i = 0; i < 4; i++) {
         switch (i) {
           case 0:
-            GPIO = (GPIO_TypeDef *)GPIOA_BASE;
+            GPIO = (GPIO_TypeDef*)GPIOA_BASE;
             STDOUT.print("PORTA: ");
             break;
           case 1:
-            GPIO = (GPIO_TypeDef *)GPIOB_BASE;
+            GPIO = (GPIO_TypeDef*)GPIOB_BASE;
             STDOUT.print("PORTB: ");
             break;
           case 2:
-            GPIO = (GPIO_TypeDef *)GPIOC_BASE;
+            GPIO = (GPIO_TypeDef*)GPIOC_BASE;
             STDOUT.print("PORTC: ");
             break;
           case 3:
-            GPIO = (GPIO_TypeDef *)GPIOH_BASE;
+            GPIO = (GPIO_TypeDef*)GPIOH_BASE;
             STDOUT.print("PORTH: ");
             break;
         }
@@ -1210,7 +1339,7 @@ class Commands : public CommandParser {
         }
         STDOUT.print("  ");
         for (int j = 15; j >= 0; j--) {
-	  int afr = 0xf & (GPIO->AFR[j >> 3] >> ((j & 7) * 4));
+          int afr = 0xf & (GPIO->AFR[j >> 3] >> ((j & 7) * 4));
           STDOUT.print("0123456789ABCDEF"[afr]);
           if (!(j & 3)) STDOUT.print(" ");
         }
@@ -1218,12 +1347,12 @@ class Commands : public CommandParser {
       }
       return true;
     }
-#endif // ENABLE_DEVELOPER_COMMANDS
+#endif  // ENABLE_DEVELOPER_COMMANDS
 #ifdef ENABLE_DEVELOPER_COMMANDS
     if (!strcmp(cmd, "CLK")) {
       if (e) {
         uint32_t c = atoi(e) * 1000000;
-        stm32l4_system_sysclk_configure(c, c/2, c/2);
+        stm32l4_system_sysclk_configure(c, c / 2, c / 2);
       }
       STDOUT.print("Clocks: hse=");
       STDOUT.print(stm32l4_system_hseclk());
@@ -1243,107 +1372,108 @@ class Commands : public CommandParser {
       STDOUT.println(stm32l4_system_saiclk());
       return true;
     }
-#endif // ENABLE_DEVELOPER_COMMANDS
+#endif  // ENABLE_DEVELOPER_COMMANDS
 #ifdef ENABLE_DEVELOPER_COMMANDS
     if (!strcmp(cmd, "whatispowered")) {
       STDOUT.print("ON: ");
-#define PRINTIFON(REG, BIT) do {                                        \
-        if (RCC->REG & RCC_##REG##_##BIT##EN) {                         \
-          STDOUT.print(" " #BIT);                                       \
-          if (!(startup_##REG & RCC_##REG##_##BIT##EN)) STDOUT.print("+"); \
-        }                                                               \
-      } while(0)
+#define PRINTIFON(REG, BIT) \
+  do { \
+    if (RCC->REG & RCC_##REG##_##BIT##EN) { \
+      STDOUT.print(" " #BIT); \
+      if (!(startup_##REG & RCC_##REG##_##BIT##EN)) STDOUT.print("+"); \
+    } \
+  } while (0)
 
-      PRINTIFON(AHB1ENR,FLASH);
-      PRINTIFON(AHB1ENR,DMA1);
-      PRINTIFON(AHB1ENR,DMA2);
-      PRINTIFON(AHB2ENR,GPIOA);
-      PRINTIFON(AHB2ENR,GPIOB);
+      PRINTIFON(AHB1ENR, FLASH);
+      PRINTIFON(AHB1ENR, DMA1);
+      PRINTIFON(AHB1ENR, DMA2);
+      PRINTIFON(AHB2ENR, GPIOA);
+      PRINTIFON(AHB2ENR, GPIOB);
 #ifdef GPIOC_BASE
-      PRINTIFON(AHB2ENR,GPIOC);
-#endif      
+      PRINTIFON(AHB2ENR, GPIOC);
+#endif
 #ifdef GPIOD_BASE
-      PRINTIFON(AHB2ENR,GPIOD);
-#endif      
+      PRINTIFON(AHB2ENR, GPIOD);
+#endif
 #ifdef GPIOE_BASE
-      PRINTIFON(AHB2ENR,GPIOE);
+      PRINTIFON(AHB2ENR, GPIOE);
 #endif
 #if defined(STM32L476xx) || defined(STM32L496xx)
-      PRINTIFON(AHB2ENR,GPIOF);
-      PRINTIFON(AHB2ENR,GPIOG);
+      PRINTIFON(AHB2ENR, GPIOF);
+      PRINTIFON(AHB2ENR, GPIOG);
 #endif
-      PRINTIFON(AHB2ENR,GPIOH);
+      PRINTIFON(AHB2ENR, GPIOH);
 #if defined(STM32L496xx)
-      PRINTIFON(AHB2ENR,GPIOI);
+      PRINTIFON(AHB2ENR, GPIOI);
 #endif
-      PRINTIFON(AHB2ENR,ADC);
-      PRINTIFON(APB1ENR1,DAC1);
+      PRINTIFON(AHB2ENR, ADC);
+      PRINTIFON(APB1ENR1, DAC1);
 #if defined(STM32L476xx) || defined(STM32L496xx)
-      PRINTIFON(AHB2ENR,OTGFS);
+      PRINTIFON(AHB2ENR, OTGFS);
 #else
-      PRINTIFON(APB1ENR1,USBFS);
+      PRINTIFON(APB1ENR1, USBFS);
 #endif
-      PRINTIFON(APB2ENR,USART1);
-      PRINTIFON(APB1ENR1,USART2);
+      PRINTIFON(APB2ENR, USART1);
+      PRINTIFON(APB1ENR1, USART2);
 #if defined(STM32L433xx) || defined(STM32L476xx) || defined(STM32L496xx)
-      PRINTIFON(APB1ENR1,USART3);
+      PRINTIFON(APB1ENR1, USART3);
 #endif
 #if defined(STM32L476xx) || defined(STM32L496xx)
-      PRINTIFON(APB1ENR1,UART4);
-      PRINTIFON(APB1ENR1,UART5);
+      PRINTIFON(APB1ENR1, UART4);
+      PRINTIFON(APB1ENR1, UART5);
 #endif
-      PRINTIFON(APB1ENR2,LPUART1);
-      PRINTIFON(APB1ENR1,I2C1);
+      PRINTIFON(APB1ENR2, LPUART1);
+      PRINTIFON(APB1ENR1, I2C1);
 #if defined(STM32L433xx) || defined(STM32L476xx) || defined(STM32L496xx)
-      PRINTIFON(APB1ENR1,I2C2);
+      PRINTIFON(APB1ENR1, I2C2);
 #endif
-      PRINTIFON(APB1ENR1,I2C3);
+      PRINTIFON(APB1ENR1, I2C3);
 #if defined(STM32L496xx)
-      PRINTIFON(APB1ENR2,I2C4);
+      PRINTIFON(APB1ENR2, I2C4);
 #endif
-      PRINTIFON(APB2ENR,SPI1);
+      PRINTIFON(APB2ENR, SPI1);
 #if defined(STM32L433xx) || defined(STM32L476xx) || defined(STM32L496xx)
-      PRINTIFON(APB1ENR1,SPI2);
+      PRINTIFON(APB1ENR1, SPI2);
 #endif
-      PRINTIFON(APB1ENR1,SPI3);
-      PRINTIFON(APB1ENR1,CAN1);
+      PRINTIFON(APB1ENR1, SPI3);
+      PRINTIFON(APB1ENR1, CAN1);
 #if defined(STM32L496xx)
-      PRINTIFON(APB1ENR1,CAN2);
+      PRINTIFON(APB1ENR1, CAN2);
 #endif
-      PRINTIFON(AHB3ENR,QSPI);
+      PRINTIFON(AHB3ENR, QSPI);
 #if defined(STM32L433xx) || defined(STM32L476xx) || defined(STM32L496xx)
-      PRINTIFON(APB2ENR,SDMMC1);
+      PRINTIFON(APB2ENR, SDMMC1);
 #endif
-      PRINTIFON(APB2ENR,SAI1);
+      PRINTIFON(APB2ENR, SAI1);
 #if defined(STM32L476xx) || defined(STM32L496xx)
-      PRINTIFON(APB2ENR,SAI2);
-      PRINTIFON(APB2ENR,DFSDM1);
+      PRINTIFON(APB2ENR, SAI2);
+      PRINTIFON(APB2ENR, DFSDM1);
 #endif
-      PRINTIFON(APB2ENR,TIM1);
-      PRINTIFON(APB1ENR1,TIM2);
+      PRINTIFON(APB2ENR, TIM1);
+      PRINTIFON(APB1ENR1, TIM2);
 #ifdef TIM3_BASE
-      PRINTIFON(APB1ENR1,TIM3);
+      PRINTIFON(APB1ENR1, TIM3);
 #endif
 #ifdef TIM4_BASE
-      PRINTIFON(APB1ENR1,TIM4);
+      PRINTIFON(APB1ENR1, TIM4);
 #endif
 #ifdef TIM5_BASE
-      PRINTIFON(APB1ENR1,TIM5);
+      PRINTIFON(APB1ENR1, TIM5);
 #endif
-      PRINTIFON(APB1ENR1,TIM6);
-#ifdef TIM7_BASE      
-      PRINTIFON(APB1ENR1,TIM7);
+      PRINTIFON(APB1ENR1, TIM6);
+#ifdef TIM7_BASE
+      PRINTIFON(APB1ENR1, TIM7);
 #endif
-#ifdef TIM8_BASE      
-      PRINTIFON(APB2ENR,TIM8);
+#ifdef TIM8_BASE
+      PRINTIFON(APB2ENR, TIM8);
 #endif
-      PRINTIFON(APB2ENR,TIM15);
-      PRINTIFON(APB2ENR,TIM16);
+      PRINTIFON(APB2ENR, TIM15);
+      PRINTIFON(APB2ENR, TIM16);
 #if defined(STM32L476xx) || defined(STM32L496xx)
-      PRINTIFON(APB2ENR,TIM17);
+      PRINTIFON(APB2ENR, TIM17);
 #endif
-      PRINTIFON(APB1ENR1,LPTIM1);
-      PRINTIFON(APB1ENR2,LPTIM2);
+      PRINTIFON(APB1ENR1, LPTIM1);
+      PRINTIFON(APB1ENR2, LPTIM2);
 
       // Not sure what CPUs implement these
       PRINTIFON(AHB1ENR, CRC);
@@ -1371,26 +1501,26 @@ class Commands : public CommandParser {
       STDOUT.println(USBD_Connected());
       return true;
     }
-#endif // ENABLE_DEVELOPER_COMMANDS
+#endif  // ENABLE_DEVELOPER_COMMANDS
 
 #ifdef ENABLE_DEVELOPER_COMMANDS
-#ifdef HAVE_STM32L4_DMA_GET    
+#ifdef HAVE_STM32L4_DMA_GET
     if (!strcmp(cmd, "dmamap")) {
       for (int channel = 0; channel < 16; channel++) {
-	stm32l4_dma_t *dma = stm32l4_dma_get(channel);
-	if (dma) {
-	  STDOUT.print(" DMA");
-	  STDOUT.print( 1 +(channel / 8) );
-	  STDOUT.print("_CH");
-	  STDOUT.print( channel % 8 );
-	  STDOUT.print(" = ");
-	  STDOUT.println(dma->channel >> 4, HEX);
-	}
+        stm32l4_dma_t* dma = stm32l4_dma_get(channel);
+        if (dma) {
+          STDOUT.print(" DMA");
+          STDOUT.print(1 + (channel / 8));
+          STDOUT.print("_CH");
+          STDOUT.print(channel % 8);
+          STDOUT.print(" = ");
+          STDOUT.println(dma->channel >> 4, HEX);
+        }
       }
       return true;
     }
-#endif // HAVE_STM32L4_DMA_GET    
-#endif // ENABLE_DEVELOPER_COMMANDS
+#endif  // HAVE_STM32L4_DMA_GET
+#endif  // ENABLE_DEVELOPER_COMMANDS
 
 #endif  // TEENSYDUINO
 
@@ -1401,7 +1531,6 @@ class Commands : public CommandParser {
 StaticWrapper<Commands> commands;
 
 #include "common/serial.h"
-
 
 #if defined(ENABLE_MOTION) || defined(ENABLE_DISPLAY_CODE)
 #include "common/i2cdevice.h"
@@ -1423,6 +1552,14 @@ SSD1306Template<128, uint32_t, DISPLAY_POWER_PINS> display(&display_controller);
 #include "display/ssd1306.h"
 #endif
 
+#include "display/layer_controller.h"
+#include "display/rgb565frame.h"
+
+#ifdef ENABLE_SPIDISPLAY
+#include "display/spidisplay.h"
+#endif
+
+
 #ifdef ENABLE_MOTION
 
 #include "motion/motion_util.h"
@@ -1443,7 +1580,7 @@ StaticWrapper<GYRO_CLASS> gyroscope;
 StaticWrapper<ACCEL_CLASS> accelerometer;
 #endif
 
-#endif   // ENABLE_MOTION
+#endif  // ENABLE_MOTION
 
 #include "sound/amplifier.h"
 #include "common/sd_card.h"
@@ -1458,7 +1595,7 @@ void setup() {
   SAVE_RCC(APB1ENR1);
   SAVE_RCC(APB1ENR2);
   SAVE_RCC(APB2ENR);
-#define SAVE_MODER(PORT, X) startup_MODER[X] = ((GPIO_TypeDef *)GPIO##PORT##_BASE)->MODER
+#define SAVE_MODER(PORT, X) startup_MODER[X] = ((GPIO_TypeDef*)GPIO##PORT##_BASE)->MODER
   SAVE_MODER(A, 0);
   SAVE_MODER(B, 1);
   SAVE_MODER(C, 2);
@@ -1480,7 +1617,7 @@ void setup() {
   uint32_t now = millis();
 
   while (millis() - now < PROFFIEOS_STARTUP_DELAY) {
-#ifndef NO_BATTERY_MONITOR  
+#ifndef NO_BATTERY_MONITOR
     srand((rand() * 917823) ^ LSAnalogRead(batteryLevelPin));
 #endif
 
@@ -1510,12 +1647,12 @@ void setup() {
       }
     }
 #if VERSION_MAJOR >= 4
-    stm32l4_gpio_pin_configure(GPIO_PIN_PA5,   (GPIO_PUPD_PULLUP | GPIO_OSPEED_HIGH | GPIO_MODE_INPUT));
+    stm32l4_gpio_pin_configure(GPIO_PIN_PA5, (GPIO_PUPD_PULLUP | GPIO_OSPEED_HIGH | GPIO_MODE_INPUT));
     delayMicroseconds(10);
     if (!stm32l4_gpio_pin_read(GPIO_PIN_PA5)) {
       STDOUT.println("SCK won't go high!");
     }
-    stm32l4_gpio_pin_configure(GPIO_PIN_PA5,   (GPIO_PUPD_PULLDOWN | GPIO_OSPEED_HIGH | GPIO_MODE_INPUT));
+    stm32l4_gpio_pin_configure(GPIO_PIN_PA5, (GPIO_PUPD_PULLDOWN | GPIO_OSPEED_HIGH | GPIO_MODE_INPUT));
     delayMicroseconds(10);
     if (stm32l4_gpio_pin_read(GPIO_PIN_PA5)) {
       STDOUT.println("SCK won't go low!");
@@ -1527,17 +1664,20 @@ void setup() {
 #endif
 
   Looper::DoSetup();
+  PVLOG_DEBUG << "***************** Booting up! *******************\n";
   // Time to identify the blade.
-  prop.FindBlade();
+  prop.FindBlade(true);
   SaberBase::DoBoot();
 #if defined(ENABLE_SD)
   if (!sd_card_found) ProffieOSErrors::sd_card_not_found();
-#endif // ENABLE_SD
+#endif  // ENABLE_SD
 }
 
 #ifdef MTP_RX_ENDPOINT
 
-void mtp_yield() { Looper::DoLoop(); }
+void mtp_yield() {
+  Looper::DoLoop();
+}
 void mtp_lock_storage(bool lock) {
   AudioStreamWork::LockSD(lock);
 }
@@ -1573,4 +1713,3 @@ void loop() {
 
 #define PROFFIEOS_DEFINE_FUNCTION_STAGE
 #include "common/errors.h"
-

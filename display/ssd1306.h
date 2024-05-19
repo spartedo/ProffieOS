@@ -22,6 +22,7 @@ IMAGE_FILESET(lock);
 IMAGE_FILESET(idle);
 /* To-Do, possibly differently
 #ifdef OLED_USE_BLASTER_IMAGES
+IMAGE_FILESET(blast);
 IMAGE_FILESET(reload);
 IMAGE_FILESET(empty);
 IMAGE_FILESET(jam);
@@ -60,7 +61,7 @@ public:
   virtual int FillFrameBuffer(bool advance) = 0;
   virtual void SetDisplay(Display<Width, col_t>* display) = 0;
   virtual Screen GetScreen() { return SCREEN_UNSET; }
-  virtual void usb_connected() = 0;
+  virtual void usb_connected() {}
 };
 
 template<int Width, class col_t>
@@ -89,8 +90,8 @@ public:
   void SetDisplay(Display<Width, col_t>* display)  {
     a->SetDisplay(display);
   }
-  Screen GetScreen() override { return a->GetScreen(); }
-  void usb_connected() override { a->usb_connected(); }
+  Screen GetScreen() { return a->GetScreen(); }
+  void usb_connected() { return a->usb_connected(); }
   void Advance(int t) { t_ -= t; }
 };
 
@@ -364,7 +365,7 @@ public:
           display_->DrawText("installed: ",0,47, Starjedi10pt7bGlyphs);
           display_->DrawText(install_time,0,63, Starjedi10pt7bGlyphs);
         }
-        next_screen_ = SCREEN_PLI;
+        next_screen_ = SCREEN_DEFAULT;
         if (font_config.ProffieOSTextMessageDuration != -1) {
           return font_config.ProffieOSTextMessageDuration;
         } else if (font_config.ProffieOSFontImageDuration > 0) {
@@ -473,7 +474,11 @@ public:
     }
   }
 
-  void SB_On() override {
+  void SB_On(EffectLocation location) override {
+    // Delay on.bmp until boot,font, or name message has been displayed for its full duration
+    if (current_effect_ == &IMG_font) return;
+    if (current_effect_ == &IMG_boot) return;
+    if (screen_ == SCREEN_STARTUP || screen_ == SCREEN_MESSAGE || screen_ == SCREEN_ERROR_MESSAGE) return;
     if (!ShowFile(&IMG_on, font_config.ProffieOSOnImageDuration)) {
       ShowDefault();
       last_delay_ = t_ = 0;
@@ -481,7 +486,7 @@ public:
     }
   }
 
-  void SB_On2() override {
+  void SB_On2(EffectLocation location) override {
     if (IMG_out) {
       ShowFileWithSoundLength(&IMG_out, font_config.ProffieOSOutImageDuration);
     }
@@ -502,7 +507,7 @@ public:
     ShowFile(e, round(duration));
   }
 
- void SB_Effect2(EffectType effect, float location) override {
+ void SB_Effect2(EffectType effect, EffectLocation location) override {
    switch (effect) {
      case EFFECT_NEWFONT:
        looped_on_ = Tristate::Unknown;
@@ -572,26 +577,29 @@ public:
        ShowFileWithSoundLength(&IMG_pstoff, font_config.ProffieOSPstoffImageDuration);
        break;
 /* To-Do, possibly differently
-   #ifdef OLED_USE_BLASTER_IMAGES
-   case EFFECT_RELOAD:
-   ShowFileWithSoundLength(&IMG_reload, font_config.ProffieOSReloadImageDuration);
-   break;
-   case EFFECT_EMPTY:
-   ShowFileWithSoundLength(&IMG_empty, font_config.ProffieOSEmptyImageDuration);
-   break;
-   case EFFECT_JAM:
-   ShowFileWithSoundLength(&IMG_jam, font_config.ProffieOSJamImageDuration);
-   break;
-   case EFFECT_CLIP_IN:
-   ShowFileWithSoundLength(&IMG_clipin, font_config.ProffieOSClipinImageDuration);
-   break;
-   case EFFECT_CLIP_OUT:
-   ShowFileWithSoundLength(&IMG_clipout, font_config.ProffieOSClipoutImageDuration);
-   break;
-   case EFFECT_DESTRUCT:
-   ShowFileWithSoundLength(&IMG_destruct, font_config.ProffieOSDestructImageDuration);
-   break;
-   #endif
+#ifdef OLED_USE_BLASTER_IMAGES
+     case EFFECT_FIRE:
+       ShowFileWithSoundLength(&IMG_blast, font_config.ProffieOSFireImageDuration);
+       break;
+     case EFFECT_RELOAD:
+       ShowFileWithSoundLength(&IMG_reload, font_config.ProffieOSReloadImageDuration);
+       break;
+     case EFFECT_EMPTY:
+       ShowFileWithSoundLength(&IMG_empty, font_config.ProffieOSEmptyImageDuration);
+       break;
+     case EFFECT_JAM:
+       ShowFileWithSoundLength(&IMG_jam, font_config.ProffieOSJamImageDuration);
+       break;
+     case EFFECT_CLIP_IN:
+       ShowFileWithSoundLength(&IMG_clipin, font_config.ProffieOSClipinImageDuration);
+       break;
+     case EFFECT_CLIP_OUT:
+       ShowFileWithSoundLength(&IMG_clipout, font_config.ProffieOSClipoutImageDuration);
+       break;
+     case EFFECT_DESTRUCT:
+       ShowFileWithSoundLength(&IMG_destruct, font_config.ProffieOSDestructImageDuration);
+       break;
+#endif
 */
        break;
      default: break;
@@ -617,7 +625,7 @@ public:
     display_->SB_Top();
   }
 
-  void SB_Off2(OffType offtype) override {
+  void SB_Off2(OffType offtype, EffectLocation location) override {
     if (offtype == OFF_IDLE) {
       SetScreenNow(SCREEN_OFF);
     } else if (IMG_in) {
@@ -678,7 +686,7 @@ public:
 
 
   // AudioStreamWork implementation
-  size_t space_available() const override {
+  size_t space_available() override {
     if (lock_fb_) return 0;
     if (eof_ && advance_) return 0;
     if (frame_available_) return 0;

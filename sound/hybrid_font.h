@@ -31,6 +31,7 @@ public:
     CONFIG_VARIABLE2(ProffieOSOnImageDuration, 5000.0f);
 /* To-Do, possibly differently
 #ifdef OLED_USE_BLASTER_IMAGES
+    CONFIG_VARIABLE2(ProffieOSFireImageDuration, 1000.0f);
     CONFIG_VARIABLE2(ProffieOSReloadImageDuration, 1000.0f);
     CONFIG_VARIABLE2(ProffieOSEmptyImageDuration, 1000.0f);
     CONFIG_VARIABLE2(ProffieOSJamImageDuration, 1000.0f);
@@ -151,6 +152,8 @@ public:
   float ProffieOSBootImageDuration;
 /* To-Do, possibly differently
 #ifdef OLED_USE_BLASTER_IMAGES
+  // for OLED displays, the time a blast.bmp will play
+  float ProffieOSFireImageDuration;
   // for OLED displays, the time a reload.bmp will play
   float ProffieOSReloadImageDuration;
   // for OLED displays, the time a empty.bmp will play
@@ -301,9 +304,14 @@ public:
   }
   
   // Use after changing alternative.
-  void RestartHum() {
+  void RestartHum(int previous_alternative) {
     if (hum_player_ && hum_player_->isPlaying()) {
-      PlayMonophonic(getHum(), NULL, 0.2f);
+      if (SFX_chhum) {
+	SFX_chhum.Select(previous_alternative);
+	PlayMonophonic(&SFX_chhum, getHum());
+      } else {
+	PlayMonophonic(getHum(), NULL, 0.2f);
+      }
     }
   }
 
@@ -446,7 +454,8 @@ public:
   Effect* getOut() { return SFX_out ? &SFX_out : &SFX_poweron; }
   Effect* getHum() { return SFX_humm ? &SFX_humm : &SFX_hum; }
 
-  void SB_Preon() {
+  void SB_Preon(EffectLocation location) {
+    saved_location_ = location;
     if (SFX_preon) {
       SFX_preon.SetFollowing(getOut());
       // PlayCommon(&SFX_preon);
@@ -480,9 +489,10 @@ public:
     }
   }
 
-  void SB_On() override {
+  void SB_On(EffectLocation location) override {
     // If preon exists, we've already queed up playing the poweron and hum.
     bool already_started = state_ == STATE_WAIT_FOR_ON && SFX_preon;
+    bool faston = state_ != STATE_WAIT_FOR_ON;
     if (monophonic_hum_) {
       if (!already_started) {
         PlayMonophonic(&SFX_poweron, &SFX_hum);
@@ -509,7 +519,7 @@ public:
       	  SaberBase::ClearSoundInfo();
       	}
       } else {
-        tmp = PlayPolyphonic(getOut());
+        tmp = PlayPolyphonic(faston && SFX_fastout ? &SFX_fastout : getOut());
       }
       hum_fade_in_ = 0.2;
       if (SFX_humm && tmp) {
@@ -528,8 +538,9 @@ public:
     }
   }
 
-  void SB_Off(OffType off_type) override {
-    SFX_in.SetFollowing(&SFX_pstoff);
+  void SB_Off(OffType off_type, EffectLocation location) override {
+    bool most_blades = location.on_blade(0);
+    SFX_in.SetFollowing( most_blades ?  &SFX_pstoff : nullptr );
     switch (off_type) {
       case OFF_CANCEL_PREON:
 	if (state_ == STATE_WAIT_FOR_ON) {
@@ -573,7 +584,12 @@ public:
           PlayPolyphonic(getNext(hum_player_, &SFX_in));
 	  hum_fade_out_ = 0.2;
         }
-        check_postoff_ = !!SFX_pstoff && off_type != OFF_FAST;
+	if (state_ == STATE_HUM_FADE_OUT && !most_blades) {
+	  state_ = STATE_HUM_ON;
+	} else {
+	  check_postoff_ = !!SFX_pstoff && off_type != OFF_FAST;
+	  saved_location_ = location;
+	}
         break;
       case OFF_BLAST:
         if (monophonic_hum_) {
@@ -585,12 +601,23 @@ public:
         }
         break;
     }
+
+    if (swing_player_) {  
+      swing_player_->set_fade_time(0.3);  
+      swing_player_->FadeAndStop();  
+      swing_player_.Free();  
+    }
   }
 
-  void SB_Effect(EffectType effect, float location) override {
+  void SB_Effect(EffectType effect, EffectLocation location) override {
     switch (effect) {
       default: return;
-      case EFFECT_PREON: SB_Preon(); return;
+      case EFFECT_MENU_CHANGE:
+        if (!PlayPolyphonic(&SFX_ccchange)) {
+          beeper.Beep(0.05, 2000.0);
+        }
+	return;
+      case EFFECT_PREON: SB_Preon(location); return;
       case EFFECT_POSTOFF: SB_Postoff(); return;
       case EFFECT_STAB:
 	if (SFX_stab) { PlayCommon(&SFX_stab); return; }
@@ -598,6 +625,7 @@ public:
       case EFFECT_CLASH: Play(&SFX_clash, &SFX_clsh); return;
       case EFFECT_FORCE: PlayCommon(&SFX_force); return;
       case EFFECT_BLAST: Play(&SFX_blaster, &SFX_blst); return;
+      case EFFECT_QUOTE: PlayCommon(&SFX_quote); return;
       case EFFECT_BOOT: PlayPolyphonic(&SFX_boot); return;
       case EFFECT_NEWFONT: SB_NewFont(); return;
       case EFFECT_LOCKUP_BEGIN: SB_BeginLockup(); return;
@@ -605,6 +633,7 @@ public:
       case EFFECT_LOW_BATTERY: SB_LowBatt(); return;
       case EFFECT_ALT_SOUND:
 	if (num_alternatives) {
+	  int previous_alternative = current_alternative;
 	  if (SaberBase::sound_number == -1) {
 	    // Next alternative
 	    if (++current_alternative >= num_alternatives)  current_alternative = 0;
@@ -614,7 +643,7 @@ public:
 	    // Set the sound num to -1 so that the altchng sound is random.
 	    SaberBase::sound_number = -1;
 	  }
-	  RestartHum();
+	  RestartHum(previous_alternative);
 	}
 	PlayCommon(&SFX_altchng);
 	break;
@@ -627,15 +656,19 @@ public:
       PlayPolyphonic(&X);
       return;
     }
-    if (detected && SFX_boot) {
-      PlayPolyphonic(&SFX_boot);
+    // SFX_bladein/out doesn't exist, playing font.wav instead
+    if (SFX_font) {
+    PVLOG_STATUS << "SFX_bladein/out doesn't exist, playing font.wav instead.\n";
+      PlayPolyphonic(&SFX_font);
       return;
     }
+    PVLOG_STATUS << " Didn't find font.wav, playing beep instead.\n";
+    // Otherwise, just beep to indicate blade status change.
     beeper.Beep(0.05, 2000.0);
   }
   void SB_NewFont() {
     if (!PlayPolyphonic(&SFX_font)) {
-      beeper.Beep(0.05, 2000.0);
+      beeper.Beep(0.05, 1046.5);
     }
   }
   void SB_Change(SaberBase::ChangeType change) override {
@@ -820,7 +853,7 @@ public:
   void Loop() override {
     if (state_ == STATE_WAIT_FOR_ON) {
       if (!GetWavPlayerPlaying(&SFX_preon)) {
-	SaberBase::TurnOn();
+	SaberBase::TurnOn(saved_location_);
 	return;
       }
     }
@@ -829,7 +862,7 @@ public:
 	  !GetWavPlayerPlaying(&SFX_poweroff) &&
 	  !GetWavPlayerPlaying(&SFX_pwroff)) {
 	check_postoff_ = false;
-	SaberBase::DoEffect(EFFECT_POSTOFF, 0);
+	SaberBase::DoEffect(EFFECT_POSTOFF, saved_location_);
       }
     }
   }
@@ -864,7 +897,7 @@ public:
   State state_;
   float volume_;
   float current_effect_length_ = 0.0;
-
+  EffectLocation saved_location_;
 };
 
 #endif

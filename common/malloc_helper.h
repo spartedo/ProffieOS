@@ -1,6 +1,8 @@
 #ifndef COMMON_MALLOC_HELPER_H
 #define COMMON_MALLOC_HELPER_H
 
+#include "string_piece.h"
+
 #ifdef TEENSYDUINO
 
 bool IsHeap(const void* mem) {
@@ -101,11 +103,10 @@ private:
   const T* ptr_;
 };
 
-const char* mkstr(const char* str) {
-  int len = strlen(str);
-  char* ret = (char*)malloc(len + 1);
+const char* mkstr(StringPiece str) {
+  char* ret = (char*)malloc(str.len + 1);
   if (!ret) return "";
-  memcpy(ret, str, len + 1);
+  memcpy(ret, str.str, str.len + 1);
   return ret;
 }
 
@@ -126,5 +127,17 @@ public:
 private:
   alignas(T) int8_t mData[sizeof(T)];
 };
+
+// Get a pointer to a static CLASS singleton.
+template<class CLASS>
+CLASS* getPtr() {
+  static CLASS mode;
+  return &mode;
+}
+
+// Converts a specification template into an actual class.
+// Uses "curiously recursive template pattern" to make replacing individual classes possible.
+template<template<class> typename SPEC_TEMPLATE>
+struct MKSPEC : public SPEC_TEMPLATE<MKSPEC<SPEC_TEMPLATE>> {};
 
 #endif
